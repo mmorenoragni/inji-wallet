@@ -18,9 +18,7 @@ import {
 } from './telemetry/TelemetryUtils';
 import {TelemetryConstants} from './telemetry/TelemetryConstants';
 import NetInfo from '@react-native-community/netinfo';
-import { createCacheObject } from './Utils';
-
-
+import {createCacheObject} from './Utils';
 
 const isCacheValid = (cachedData: any) => {
   if (!cachedData?.cachedTime || typeof cachedData.cachedTime !== 'number') {
@@ -124,11 +122,71 @@ export const API = {
   },
 
   fetchIssuers: async () => {
-    const response = await request(
-      API_URLS.issuersList.method,
-      API_URLS.issuersList.buildURL(),
-    );
-    return response.response.issuers || [];
+    // Mock response for RENIEC issuer with IDPerú integration
+    const mockResponse = {
+      response: {
+        issuers: [
+          {
+            issuer_id: 'RENIEC',
+            protocol: 'OpenId4VCI',
+            display: [
+              {
+                name: 'Registro Nacional de Identificación y Estado Civil',
+                logo: {
+                  url: 'https://www.reniec.gob.pe/portal/images/logo-reniec.png',
+                  alt_text: 'RENIEC Logo',
+                },
+                title: 'Registro Nacional de Identificación y Estado Civil',
+                description: 'Descarga credenciales desde RENIEC usando IDPerú',
+                language: 'es',
+              },
+            ],
+            client_id: 'ab74ea27377a4830bf6905cd916',
+            wellknown_endpoint:
+              'https://idp-pre.reniec.gob.pe/.well-known/openid-credential-issuer',
+            redirect_uri: 'io.mosip.residentapp.inji://oauthredirect',
+            authorization_audience:
+              'https://idp-pre.reniec.gob.pe/service/auth',
+            token_endpoint: 'https://idp-pre.reniec.gob.pe/service/token',
+            proxy_token_endpoint: 'https://idp-pre.reniec.gob.pe/service/token',
+            client_alias: 'inji-wallet-client',
+            qr_code_type: 'EmbeddedVC',
+            enabled: 'true',
+            credential_issuer: 'RENIEC',
+            credential_issuer_host: 'https://idp-pre.reniec.gob.pe/',
+            authorizationEndpoint: 'https://idp-pre.reniec.gob.pe/service/auth',
+            authorization_servers: ['https://idp-pre.reniec.gob.pe/'],
+            // IDPerú specific configuration
+            use_idperu: true,
+            idperu_android_package: 'pe.gob.reniec.idperu',
+            idperu_android_activity: 'pe.gob.reniec.idperu.AuthActivity',
+            idperu_android_input_key: 'auth_params',
+            idperu_requires_qr: false,
+            // ACR values for authentication
+            acr_values: 'pki_dnie',
+            // Credential configurations (placeholder - should be populated from well-known)
+            credential_configurations_supported: {
+              RENIEC_IdentityCredential: {
+                format: 'vc+sd-jwt',
+                cryptographic_binding_methods_supported: ['ES256'],
+                credential_signing_alg_values_supported: ['ES256'],
+              },
+            },
+          },
+        ],
+      },
+      errors: [],
+    };
+
+    // Return mock data instead of making API call
+    return mockResponse.response.issuers || [];
+
+    // Original API call (commented out for mock)
+    // const response = await request(
+    //   API_URLS.issuersList.method,
+    //   API_URLS.issuersList.buildURL(),
+    // );
+    // return response.response.issuers || [];
   },
 
   fetchIssuerConfig: async (issuerId: string) => {
@@ -145,7 +203,7 @@ export const API = {
     );
     return response;
   },
-  
+
   fetchAllProperties: async () => {
     const response = await request(
       API_URLS.allProperties.method,
@@ -183,7 +241,8 @@ export const CACHED_API = {
   ) =>
     generateCacheAPIFunction({
       isCachePreferred,
-      cacheKey: API_CACHED_STORAGE_KEYS.fetchIssuerWellknownConfig(issuerCacheKey),
+      cacheKey:
+        API_CACHED_STORAGE_KEYS.fetchIssuerWellknownConfig(issuerCacheKey),
       fetchCall: API.fetchIssuerWellknownConfig.bind(null, credentialIssuer),
     }),
 
@@ -251,7 +310,7 @@ async function generateCacheAPIFunctionWithCachePreference(
       return cachedData.response;
     } else {
       const response = await fetchCall();
-      if(!response) {
+      if (!response) {
         throw new Error('Received Empty response in fetch call');
       }
       const cacheObject = createCacheObject(response);

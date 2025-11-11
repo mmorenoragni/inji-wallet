@@ -219,7 +219,25 @@ export const IssuersActions = (model: any) => {
 
     setSelectedIssuers: model.assign({
       selectedIssuer: (context: any, event: any) => {
-        return context.issuers.find(issuer => issuer.issuer_id === event.id);
+        const issuer = context.issuers.find(
+          issuer => issuer.issuer_id === event.id,
+        );
+        // Preserve all issuer fields including IDPerú configuration
+        return {
+          ...issuer,
+          client_id: issuer?.client_id ?? 'ab74ea27377a4830bf6905cd916',
+          redirect_uri:
+            issuer?.redirect_uri ?? 'io.mosip.residentapp.inji://oauthredirect',
+          acr_values: issuer?.acr_values,
+          use_idperu: issuer?.use_idperu,
+          // Preserve IDPerú configuration fields
+          idperu_android_package: issuer?.idperu_android_package,
+          idperu_android_activity: issuer?.idperu_android_activity,
+          idperu_android_input_key: issuer?.idperu_android_input_key,
+          idperu_ios_scheme: issuer?.idperu_ios_scheme,
+          idperu_ios_input_param: issuer?.idperu_ios_input_param,
+          idperu_requires_qr: issuer?.idperu_requires_qr,
+        };
       },
     }),
     resetSelectedIssuer: model.assign({
