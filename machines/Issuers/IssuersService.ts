@@ -29,6 +29,16 @@ import {
   formatUrlForDisplay,
   compareUrlParams,
 } from '../../shared/idperu/IdPeruUrlValidator';
+import {
+  logInfo,
+  logWarn,
+  logError,
+  logPKCEGenerated,
+  logUrlConstruction,
+  logUrlValidation,
+  logParameterComparison,
+  logUrlBreakdown,
+} from '../../shared/idperu/IdPeruLogger';
 
 export const IssuersService = () => {
   return {
@@ -124,6 +134,13 @@ export const IssuersService = () => {
           ...(codeVerifier && {codeVerifier}),
         };
 
+        if (codeVerifier) {
+          logInfo('Token request with PKCE code_verifier', {
+            hasCodeVerifier: true,
+            codeVerifierLength: codeVerifier.length,
+          });
+        }
+
         sendBack({
           type: 'TOKEN_REQUEST',
           tokenRequest: enhancedTokenRequest,
@@ -132,6 +149,7 @@ export const IssuersService = () => {
         // Clear PKCE session after token request is sent
         if (codeVerifier) {
           idPeruSessionManager.clearSession();
+          logInfo('PKCE session cleared after token request');
         }
       };
       const {credential} =
@@ -254,6 +272,13 @@ export const IssuersService = () => {
           ...(codeVerifier && {codeVerifier}),
         };
 
+        if (codeVerifier) {
+          logInfo('Token request with PKCE code_verifier (from offer)', {
+            hasCodeVerifier: true,
+            codeVerifierLength: codeVerifier.length,
+          });
+        }
+
         sendBack({
           type: 'TOKEN_REQUEST',
           tokenRequest: enhancedTokenRequest,
@@ -262,6 +287,7 @@ export const IssuersService = () => {
         // Clear PKCE session after token request is sent
         if (codeVerifier) {
           idPeruSessionManager.clearSession();
+          logInfo('PKCE session cleared after token request (from offer)');
         }
       };
 
@@ -429,13 +455,7 @@ async function launchIdPeruAuth(
       await idPeruSessionManager.generatePKCE();
 
     // Log PKCE generation for verification
-    if (__DEV__) {
-      console.log('[IDPerú] PKCE Generated:', {
-        codeVerifierLength: codeVerifier.length,
-        codeChallengeLength: codeChallenge.length,
-        codeChallengePreview: codeChallenge.substring(0, 20) + '...',
-      });
-    }
+    logPKCEGenerated(codeVerifier, codeChallenge);
 
     let qrData: string;
 
@@ -455,18 +475,16 @@ async function launchIdPeruAuth(
       const finalUrl = authUrl.toString();
 
       // Log URL construction for verification
-      if (__DEV__) {
-        console.log('[IDPerú] Authorization URL (QR mode):', finalUrl);
-        console.log('[IDPerú] URL Parameters:', {
-          client_id: clientId,
-          redirect_uri: redirectUri,
-          scope: scope,
-          response_type: 'code',
-          code_challenge: codeChallenge.substring(0, 20) + '...',
-          code_challenge_method: 'S256',
-          acr_values: acrValues || 'not set',
-        });
-      }
+      logInfo('Authorization URL (QR mode)', finalUrl);
+      logInfo('URL Parameters', {
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        scope: scope,
+        response_type: 'code',
+        code_challenge: codeChallenge.substring(0, 20) + '...',
+        code_challenge_method: 'S256',
+        acr_values: acrValues || 'not set',
+      });
 
       // Fetch QR data from authorization endpoint
       const response = await fetch(authUrl.toString(), {
@@ -485,14 +503,12 @@ async function launchIdPeruAuth(
       const data = await response.json();
       qrData = data.qr_data || data.qrData || finalUrl;
 
-      if (__DEV__) {
-        console.log('[IDPerú] QR Data received:', {
-          hasQrData: !!data.qr_data,
-          hasQrDataAlt: !!data.qrData,
-          qrDataLength: qrData.length,
-          usingFallback: !data.qr_data && !data.qrData,
-        });
-      }
+      logInfo('QR Data received', {
+        hasQrData: !!data.qr_data,
+        hasQrDataAlt: !!data.qrData,
+        qrDataLength: qrData.length,
+        usingFallback: !data.qr_data && !data.qrData,
+      });
     } else {
       // IDPerú accepts full URL: construct URL with PKCE
       const authUrl = new URL(authorizationEndpoint);
@@ -519,52 +535,36 @@ async function launchIdPeruAuth(
       };
       const paramComparison = compareUrlParams(qrData, expectedParams);
 
-      if (__DEV__) {
-        console.log('[IDPerú] ===== URL VERIFICATION =====');
-        console.log('[IDPerú] Authorization URL (Direct mode):', qrData);
-        console.log(
-          '[IDPerú] URL (masked for display):',
-          formatUrlForDisplay(qrData),
-        );
-        console.log('[IDPerú] URL Validation:', {
-          isValid: urlValidation.isValid,
-          errors: urlValidation.errors,
-          warnings: urlValidation.warnings,
-        });
-        console.log('[IDPerú] Parameter Comparison:', {
-          matches: paramComparison.matches,
-          missing: paramComparison.missing,
-          incorrect: paramComparison.incorrect,
-          extra: paramComparison.extra,
-        });
-        console.log('[IDPerú] URL Parameters:', {
-          client_id: clientId,
-          redirect_uri: redirectUri,
-          scope: scope,
-          response_type: 'code',
-          code_challenge: codeChallenge.substring(0, 20) + '...',
-          code_challenge_method: 'S256',
-          acr_values: acrValues || 'not set',
-        });
-        console.log('[IDPerú] URL Breakdown:', {
-          base: authorizationEndpoint,
-          queryParams: Object.fromEntries(authUrl.searchParams),
-        });
-        console.log('[IDPerú] ============================');
+      // Log URL construction details
+      logUrlConstruction(qrData, {
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        scope: scope,
+        response_type: 'code',
+        code_challenge: codeChallenge.substring(0, 20) + '...',
+        code_challenge_method: 'S256',
+        acr_values: acrValues || 'not set',
+      });
+      logInfo('URL (masked for display)', formatUrlForDisplay(qrData));
+      logUrlValidation({
+        isValid: urlValidation.isValid,
+        errors: urlValidation.errors,
+        warnings: urlValidation.warnings,
+      });
+      logParameterComparison({
+        matches: paramComparison.matches,
+        missing: paramComparison.missing,
+        incorrect: paramComparison.incorrect,
+        extra: paramComparison.extra,
+      });
+      logUrlBreakdown({
+        base: authorizationEndpoint,
+        queryParams: Object.fromEntries(authUrl.searchParams),
+      });
 
-        // Log errors if URL is invalid
-        if (!urlValidation.isValid) {
-          console.error(
-            '[IDPerú] URL VALIDATION FAILED:',
-            urlValidation.errors,
-          );
-        }
-        if (!paramComparison.matches) {
-          console.warn('[IDPerú] PARAMETER MISMATCH:', {
-            missing: paramComparison.missing,
-            incorrect: paramComparison.incorrect,
-          });
-        }
+      // Log errors if URL is invalid
+      if (!urlValidation.isValid) {
+        logError('URL VALIDATION FAILED', urlValidation.errors);
       }
     }
 
@@ -579,21 +579,35 @@ async function launchIdPeruAuth(
     };
 
     // Call IDPerú native module with new API
+    logInfo('Starting IDPerú authentication', {
+      androidPackage: idPeruConfig.androidPackage,
+      androidActivity: idPeruConfig.androidActivity,
+    });
     const authCode = await startIdPeruAuth(qrData, idPeruConfig);
 
     // Validate authorization code
     if (!validateAuthCode(authCode)) {
+      logError('Invalid authorization code received', {
+        codeLength: authCode?.length || 0,
+        codePreview: authCode?.substring(0, 10) || 'null',
+      });
       throw new Error('Invalid authorization code received from IDPerú');
     }
 
+    logInfo('Authorization code received from IDPerú', {
+      codeLength: authCode.length,
+      codePreview: authCode.substring(0, 10) + '...',
+    });
+
     // Send auth code to VCI client
     await VciClient.getInstance().sendAuthCode(authCode);
+    logInfo('Authorization code sent to VCI client');
   } catch (error: any) {
     // Clean up PKCE session on error
     idPeruSessionManager.clearSession();
 
     const sanitizedError = sanitizeErrorMessage(error);
-    console.error('IDPerú authentication error:', sanitizedError);
+    logError('Authentication error', sanitizedError);
 
     // Send cancel event to machine
     sendBack({
