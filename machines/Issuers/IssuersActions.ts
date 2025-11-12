@@ -219,7 +219,25 @@ export const IssuersActions = (model: any) => {
 
     setSelectedIssuers: model.assign({
       selectedIssuer: (context: any, event: any) => {
-        return context.issuers.find(issuer => issuer.issuer_id === event.id);
+        const issuer = context.issuers.find(
+          issuer => issuer.issuer_id === event.id,
+        );
+        // Preserve all issuer fields including IDPerú configuration
+        return {
+          ...issuer,
+          client_id: issuer?.client_id ?? 'ab74ea27377a4830bf6905cd916',
+          redirect_uri:
+            issuer?.redirect_uri ?? 'io.mosip.residentapp.inji://oauthredirect',
+          acr_values: issuer?.acr_values,
+          use_idperu: issuer?.use_idperu,
+          // Preserve IDPerú configuration fields
+          idperu_android_package: issuer?.idperu_android_package,
+          idperu_android_activity: issuer?.idperu_android_activity,
+          idperu_android_input_key: issuer?.idperu_android_input_key,
+          idperu_ios_scheme: issuer?.idperu_ios_scheme,
+          idperu_ios_input_param: issuer?.idperu_ios_input_param,
+          idperu_requires_qr: issuer?.idperu_requires_qr,
+        };
       },
     }),
     resetSelectedIssuer: model.assign({
@@ -233,6 +251,16 @@ export const IssuersActions = (model: any) => {
           event.data.credential_configurations_supported,
         display: event.data.display,
         authorization_servers: event.data.authorization_servers,
+        // Preserve IDPerú configuration from initial issuer config
+        use_idperu: context.selectedIssuer.use_idperu,
+        idperu_android_package: context.selectedIssuer.idperu_android_package,
+        idperu_android_activity: context.selectedIssuer.idperu_android_activity,
+        idperu_android_input_key:
+          context.selectedIssuer.idperu_android_input_key,
+        idperu_requires_qr: context.selectedIssuer.idperu_requires_qr,
+        acr_values: context.selectedIssuer.acr_values,
+        client_id: context.selectedIssuer.client_id,
+        redirect_uri: context.selectedIssuer.redirect_uri,
       }),
       selectedIssuerWellknownResponse: (_: any, event: any) => {
         return event.data;

@@ -18,9 +18,7 @@ import {
 } from './telemetry/TelemetryUtils';
 import {TelemetryConstants} from './telemetry/TelemetryConstants';
 import NetInfo from '@react-native-community/netinfo';
-import { createCacheObject } from './Utils';
-
-
+import {createCacheObject} from './Utils';
 
 const isCacheValid = (cachedData: any) => {
   if (!cachedData?.cachedTime || typeof cachedData.cachedTime !== 'number') {
@@ -53,7 +51,7 @@ export const API_URLS: ApiUrls = {
   authorizationServerMetadataConfig: {
     method: 'GET',
     buildURL: (authorizationServerUrl: string): string =>
-      `${authorizationServerUrl}/.well-known/oauth-authorization-server`,
+      `${authorizationServerUrl}/.well-known/openid-configuration`,
   },
 
   allProperties: {
@@ -145,7 +143,7 @@ export const API = {
     );
     return response;
   },
-  
+
   fetchAllProperties: async () => {
     const response = await request(
       API_URLS.allProperties.method,
@@ -183,7 +181,8 @@ export const CACHED_API = {
   ) =>
     generateCacheAPIFunction({
       isCachePreferred,
-      cacheKey: API_CACHED_STORAGE_KEYS.fetchIssuerWellknownConfig(issuerCacheKey),
+      cacheKey:
+        API_CACHED_STORAGE_KEYS.fetchIssuerWellknownConfig(issuerCacheKey),
       fetchCall: API.fetchIssuerWellknownConfig.bind(null, credentialIssuer),
     }),
 
@@ -251,7 +250,7 @@ async function generateCacheAPIFunctionWithCachePreference(
       return cachedData.response;
     } else {
       const response = await fetchCall();
-      if(!response) {
+      if (!response) {
         throw new Error('Received Empty response in fetch call');
       }
       const cacheObject = createCacheObject(response);
@@ -301,7 +300,7 @@ async function generateCacheAPIFunctionWithAPIPreference(
       onErrorHardCodedValue != undefined
     }`);
     console.error(`The error in fetching api ${cacheKey}`, error);
-    var cachedData = null;
+    let cachedData = null;
     if (!(await NetInfo.fetch()).isConnected) {
       cachedData = await getItem(cacheKey, null, '');
     }

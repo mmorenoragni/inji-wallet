@@ -437,10 +437,7 @@ export const IssuersMachine = model.createMachine(
         invoke: {
           src: 'updateCredential',
           onDone: {
-            actions: [
-              'setVerifiableCredential',
-              'setCredentialWrapper',
-            ],
+            actions: ['setVerifiableCredential', 'setCredentialWrapper'],
             target: 'verifyingCredential',
           },
         },
@@ -708,7 +705,11 @@ export const IssuersMachine = model.createMachine(
         invoke: {
           src: 'verifyCredential',
           onDone: {
-            actions: ['sendSuccessEndEvent', 'setVerificationResult','resetCredentialOfferFlowType',],
+            actions: [
+              'sendSuccessEndEvent',
+              'setVerificationResult',
+              'resetCredentialOfferFlowType',
+            ],
             target: 'storing',
           },
           onError: [
@@ -814,4 +815,13 @@ export interface issuerType {
   authorizationEndpoint: string;
   credential_issuer_host: string;
   authorization_servers: [string];
+  acr_values?: string;
+  use_idperu?: boolean;
+  // IDPerú configuration
+  idperu_android_package?: string;
+  idperu_android_activity?: string;
+  idperu_android_input_key?: string;
+  idperu_ios_scheme?: string;
+  idperu_ios_input_param?: string;
+  idperu_requires_qr?: boolean;
 }

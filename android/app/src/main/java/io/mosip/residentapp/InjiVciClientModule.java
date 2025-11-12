@@ -71,12 +71,18 @@ public class InjiVciClientModule extends ReactContextBaseJavaModule {
     public void getIssuerMetadata(String credentialIssuer, Promise promise) {
         new Thread(() -> {
             try {
+                Log.d("InjiVciClientModule", "[getIssuerMetadata] Starting metadata download for: " + credentialIssuer);
                 Map<String, Object> issuerMetadata = vciClient.getIssuerMetadata(credentialIssuer);
+                Log.d("InjiVciClientModule", "[getIssuerMetadata] Metadata received successfully");
+                Log.d("InjiVciClientModule", "[getIssuerMetadata] Authorization servers: " + issuerMetadata.get("authorization_servers"));
                 reactContext.runOnUiQueueThread(() -> {
                     String json = new Gson().toJson(issuerMetadata, Map.class);
                     promise.resolve(json);
                 });
             } catch (Exception e) {
+                Log.e("InjiVciClientModule", "[getIssuerMetadata] ERROR: " + e.getMessage(), e);
+                Log.e("InjiVciClientModule", "[getIssuerMetadata] Error class: " + e.getClass().getName());
+                Log.e("InjiVciClientModule", "[getIssuerMetadata] Credential issuer: " + credentialIssuer);
                 reactContext.runOnUiQueueThread(() -> {
                     promise.reject("GET_ISSUER_METADATA_FAILED", e.getMessage(), e);
                 });
@@ -106,15 +112,29 @@ public class InjiVciClientModule extends ReactContextBaseJavaModule {
     public void requestCredentialFromTrustedIssuer(String credentialIssuer, String credentialConfigurationId, String clientMetadataJson, Promise promise) {
         new Thread(() -> {
             try {
+                Log.d("InjiVciClientModule", "[requestCredentialFromTrustedIssuer] Starting request...");
+                Log.d("InjiVciClientModule", "[requestCredentialFromTrustedIssuer] Credential Issuer: " + credentialIssuer);
+                Log.d("InjiVciClientModule", "[requestCredentialFromTrustedIssuer] Credential Configuration ID: " + credentialConfigurationId);
+                Log.d("InjiVciClientModule", "[requestCredentialFromTrustedIssuer] Client Metadata: " + clientMetadataJson);
+                
                 ClientMetadata clientMetadata= new Gson().fromJson(
                     clientMetadataJson, ClientMetadata.class);
 
                 CredentialResponse response = VCIClientBridge.requestCredentialFromTrustedIssuerSync(vciClient, credentialIssuer, credentialConfigurationId,clientMetadata);
 
+                Log.d("InjiVciClientModule", "[requestCredentialFromTrustedIssuer] Credential received successfully");
                 reactContext.runOnUiQueueThread(() -> {
                     promise.resolve(response != null ? response.toJsonString() : null);
                 });
             } catch (Exception e) {
+                Log.e("InjiVciClientModule", "[requestCredentialFromTrustedIssuer] ERROR: " + e.getMessage(), e);
+                Log.e("InjiVciClientModule", "[requestCredentialFromTrustedIssuer] Error class: " + e.getClass().getName());
+                Log.e("InjiVciClientModule", "[requestCredentialFromTrustedIssuer] Credential Issuer: " + credentialIssuer);
+                Log.e("InjiVciClientModule", "[requestCredentialFromTrustedIssuer] Credential Config ID: " + credentialConfigurationId);
+                
+                // Log stack trace for debugging
+                e.printStackTrace();
+                
                 reactContext.runOnUiQueueThread(() -> {
                     promise.reject("TRUSTED_ISSUER_FAILED", e.getMessage(), e);
                 });

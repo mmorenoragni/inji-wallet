@@ -9,6 +9,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.RequiresApi;
 import com.facebook.react.ReactActivity;
 import com.facebook.react.ReactActivityDelegate;
@@ -35,6 +37,16 @@ public class MainActivity extends ReactActivity {
 
   private static final int REQUEST_CODE_REQUIRED_PERMISSIONS = 1;
 
+  // IDPerú integration
+  private static ActivityResultLauncher<Intent> idPeruLauncher;
+  private static IdPeruResultListener idPeruResultListener;
+
+  public interface IdPeruResultListener {
+    void onSuccess(String authCode);
+    void onCancel(String reason);
+    void onError(String message);
+  }
+
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     // Set the theme to AppTheme BEFORE onCreate to support
@@ -44,6 +56,28 @@ public class MainActivity extends ReactActivity {
     super.onCreate(null);
     Intent intent = getIntent();
     handleIntent(intent);
+
+    // Register IDPerú launcher
+    idPeruLauncher = registerForActivityResult(
+      new ActivityResultContracts.StartActivityForResult(),
+      result -> {
+        if (idPeruResultListener == null) return;
+
+        if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+          String code = result.getData().getStringExtra("auth_code"); // Key agreed with IDPerú
+          if (code != null) {
+            idPeruResultListener.onSuccess(code);
+          } else {
+            idPeruResultListener.onError("Missing auth_code in result intent");
+          }
+        } else if (result.getResultCode() == RESULT_CANCELED) {
+          idPeruResultListener.onCancel("User canceled or no result");
+        } else {
+          idPeruResultListener.onError("Unknown result");
+        }
+        idPeruResultListener = null;
+      }
+    );
   }
 
   @Override
@@ -132,5 +166,20 @@ public class MainActivity extends ReactActivity {
         // If you opted-in for the New Architecture, we enable Concurrent React (i.e. React 18).
         DefaultNewArchitectureEntryPoint.getConcurrentReactEnabled() // concurrentRootEnabled
     ));
+  }
+
+  /**
+   * Launches IDPerú app for authentication
+   * @param activity The ReactActivity instance
+   * @param intent Intent configured to launch IDPerú
+   * @param listener Callback listener for result handling
+   */
+  public static void launchIdPeru(ReactActivity activity, Intent intent, IdPeruResultListener listener) {
+    if (idPeruLauncher == null) {
+      listener.onError("Launcher not ready");
+      return;
+    }
+    idPeruResultListener = listener;
+    idPeruLauncher.launch(intent);
   }
 }
