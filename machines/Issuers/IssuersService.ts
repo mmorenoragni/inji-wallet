@@ -762,10 +762,10 @@ async function launchIdPeruAuth(
       console.log('[IDPerú] Config:', idPeruConfig);
       console.log('[IDPerú] Calling startIdPeruAuth...');
     }
-
+    console.log('[IDPerú] qrData:', qrData);
     // Call IDPerú native module with new API
     const authCode = await startIdPeruAuth(qrData, idPeruConfig);
-
+    console.log('[IDPerú] authCode:', authCode);
     if (__DEV__) {
       console.log('[IDPerú] ===== AUTHORIZATION CODE RECEIVED =====');
       console.log('[IDPerú] Auth code length:', authCode?.length);

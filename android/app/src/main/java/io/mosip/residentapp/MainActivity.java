@@ -61,18 +61,47 @@ public class MainActivity extends ReactActivity {
     idPeruLauncher = registerForActivityResult(
       new ActivityResultContracts.StartActivityForResult(),
       result -> {
-        if (idPeruResultListener == null) return;
-
+        android.util.Log.d("IDPerú", "========== IDPerú RESULT RECEIVED ==========");
+        android.util.Log.d("IDPerú", "Result code: " + result.getResultCode());
+        android.util.Log.d("IDPerú", "RESULT_OK value: " + RESULT_OK + " (expected: -1)");
+        android.util.Log.d("IDPerú", "RESULT_CANCELED value: " + RESULT_CANCELED + " (expected: 0)");
+        android.util.Log.d("IDPerú", "Result data is null: " + (result.getData() == null));
+        if (result.getData() != null) {
+          android.util.Log.d("IDPerú", "Result Intent: " + result.getData().toString());
+          android.os.Bundle extras = result.getData().getExtras();
+          if (extras != null) {
+            android.util.Log.d("IDPerú", "Result has extras");
+            for (String key : extras.keySet()) {
+              Object value = extras.get(key);
+              android.util.Log.d("IDPerú", "  Extra: " + key + " = " + value);
+            }
+          } else {
+            android.util.Log.d("IDPerú", "Result has NO extras");
+          }
+        } else {
+          android.util.Log.d("IDPerú", "Result Intent is NULL");
+        }
+        android.util.Log.d("IDPerú", "===========================================");
+        
+        if (idPeruResultListener == null) {
+          android.util.Log.e("IDPerú", "ERROR: idPeruResultListener is NULL!");
+          return;
+        }
+    
         if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-          String code = result.getData().getStringExtra("auth_code"); // Key agreed with IDPerú
+          String code = result.getData().getStringExtra("auth_code");
+          android.util.Log.d("IDPerú", "Extracted auth_code: " + (code != null ? "PRESENT (length=" + code.length() + ")" : "NULL"));
+          
           if (code != null) {
             idPeruResultListener.onSuccess(code);
           } else {
             idPeruResultListener.onError("Missing auth_code in result intent");
           }
         } else if (result.getResultCode() == RESULT_CANCELED) {
+          android.util.Log.w("IDPerú", "IDPerú returned RESULT_CANCELED");
           idPeruResultListener.onCancel("User canceled or no result");
         } else {
+          android.util.Log.e("IDPerú", "Unknown result code: " + result.getResultCode());
           idPeruResultListener.onError("Unknown result");
         }
         idPeruResultListener = null;

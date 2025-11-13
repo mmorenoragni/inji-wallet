@@ -1,5 +1,6 @@
 package io.mosip.residentapp
 
+import android.content.ComponentName
 import android.content.Intent
 import com.facebook.react.bridge.*
 
@@ -47,12 +48,23 @@ class IdPeruModule(private val reactContext: ReactApplicationContext) : ReactCon
                 return
             }
 
-            // Create Intent to launch IDPerú with dynamic configuration
+            // Create Intent to launch IDPerú (following official RENIEC example)
             val intent = Intent().apply {
-                setClassName(finalPackageName, finalActivityName)
+                component = ComponentName(finalPackageName, finalActivityName)
                 putExtra(finalInputKey, qrData)
+                // No flags - they interfere with ActivityResultLauncher
             }
-
+            // Log everything before launching
+            android.util.Log.d("IDPerú", "========== LAUNCHING IDPerú APP ==========")
+            android.util.Log.d("IDPerú", "Package: $finalPackageName")
+            android.util.Log.d("IDPerú", "Activity: $finalActivityName")
+            android.util.Log.d("IDPerú", "Input Key Name: '$finalInputKey'")
+            android.util.Log.d("IDPerú", "Input Value: '$qrData'")
+            android.util.Log.d("IDPerú", "Input Value Length: ${qrData.length}")
+            android.util.Log.d("IDPerú", "Starts with RENIEC_IDAAS: ${qrData.startsWith("RENIEC_IDAAS.")}")
+            android.util.Log.d("IDPerú", "Intent: ${intent.toString()}")
+            android.util.Log.d("IDPerú", "Intent Extras: ${intent.extras}")
+            android.util.Log.d("IDPerú", "==========================================")
             // Launch IDPerú using MainActivity's launcher
             MainActivity.launchIdPeru(activity, intent, object : MainActivity.IdPeruResultListener {
                 override fun onSuccess(authCode: String) {
