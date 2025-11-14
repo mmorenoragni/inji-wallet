@@ -29,6 +29,7 @@ import {
   formatUrlForDisplay,
   compareUrlParams,
 } from '../../shared/idperu/IdPeruUrlValidator';
+import {request} from '../../shared/request';
 
 export const IssuersService = () => {
   return {
@@ -589,77 +590,49 @@ async function launchIdPeruAuth(
     let qrData: string;
 
     if (requiresQr) {
-      // IDPerú requires QR data: fetch from authorization endpoint
-      const authUrl = new URL(authorizationEndpoint);
-      authUrl.searchParams.set('client_id', clientId);
-      authUrl.searchParams.set('redirect_uri', redirectUri);
-      authUrl.searchParams.set('scope', 'openid');
-      authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('code_challenge', codeChallenge);
-      authUrl.searchParams.set('code_challenge_method', 'S256');
-      // ACR values is REQUIRED for RENIEC/IDPerú (hardcoded fallback to pki_dnie)
-      authUrl.searchParams.set('acr_values', 'pki_dnie');
+      // IDPerú requires QR data: fetch from Mimoto bc-authorize endpoint
+      const bcAuthorizeEndpoint = '/v1/mimoto/bc-authorize';
 
-      const finalUrl = authUrl.toString();
-
-      // Log URL construction for verification
+      // Log request for verification
       if (__DEV__) {
         console.log(
-          '[IDPerú] ===== FETCHING SESSION FROM AUTHORIZATION ENDPOINT =====',
+          '[IDPerú] ===== FETCHING SESSION FROM MIMOTO BC-AUTHORIZE =====',
         );
-        console.log('[IDPerú] Authorization URL (QR mode):', finalUrl);
-        console.log('[IDPerú] URL Parameters:', {
-          client_id: clientId,
-          redirect_uri: redirectUri,
-          scope: scope,
-          response_type: 'code',
-          code_challenge: codeChallenge.substring(0, 20) + '...',
-          code_challenge_method: 'S256',
-          acr_values: acrValues || 'not set',
-        });
-        console.log('[IDPerú] Making GET request to fetch session/QR data...');
+        console.log('[IDPerú] Endpoint:', bcAuthorizeEndpoint);
+        console.log('[IDPerú] Making GET request to fetch auth_req_id...');
       }
 
-      // Fetch QR data from authorization endpoint
-      const response = await fetch(authUrl.toString(), {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-        },
-      });
-      console.log('[IDPerú] Response:', response);
-      if (!response.ok) {
-        throw new Error(
-          `Failed to fetch QR data: ${response.status} ${response.statusText}`,
-        );
+      // Fetch QR data from Mimoto bc-authorize endpoint
+      const data = await request('GET', bcAuthorizeEndpoint);
+
+      console.log('[IDPerú] Response data:', data);
+
+      // Extract auth_req_id from response
+      if (!data.auth_req_id) {
+        throw new Error('Missing auth_req_id in bc-authorize response');
       }
 
-      const data = await response.json();
-      console.log('[IDPerú] Data:', data);
-      qrData = data.codePkiFlow || data.qr_data || data.qrData || finalUrl;
-      console.log('[IDPerú] QR Data:', qrData);
-      console.log('[IDPerú] Final URL:', finalUrl);
+      qrData = data.auth_req_id;
+
+      console.log('[IDPerú] Auth Request ID:', qrData);
+      console.log('[IDPerú] Expires in:', data.expires_in, 'seconds');
+      console.log('[IDPerú] Interval:', data.interval, 'seconds');
       console.log('[IDPerú] Code Challenge:', codeChallenge);
       console.log('[IDPerú] Code Verifier:', codeVerifier);
       console.log('[IDPerú] Scope:', scope);
       console.log('[IDPerú] ACR Values:', acrValues);
       console.log('[IDPerú] Requires QR:', requiresQr);
       console.log('[IDPerú] Client ID:', clientId);
-      console.log('[IDPerú] __DEV__:', __DEV__);
-      console.log('[IDPerú] Authorization Endpoint:', authorizationEndpoint);
-      console.log('[IDPerú] Context:', context);
-      console.log('[IDPerú] Send Back:', sendBack);
+
       if (__DEV__) {
-        console.log('[IDPerú] Response from authorization endpoint:', data);
+        console.log('[IDPerú] Response from bc-authorize endpoint:', data);
         console.log('[IDPerú] Session data received:', {
-          hasCodePkiFlow: !!data.codePkiFlow,
-          hasQrData: !!data.qr_data,
-          hasQrDataAlt: !!data.qrData,
-          success: data.success,
-          qrAvailable: data.qrAvailable,
-          sessionDataLength: qrData.length,
-          sessionDataPreview: qrData.substring(0, 50) + '...',
-          usingFallback: !data.codePkiFlow && !data.qr_data && !data.qrData,
+          auth_req_id: qrData,
+          expires_in: data.expires_in,
+          interval: data.interval,
+          authReqIdLength: qrData.length,
+          authReqIdPreview: qrData.substring(0, 50) + '...',
+          startsWithReniecIdaas: qrData.startsWith('RENIEC_IDAAS.'),
         });
       }
     } else {
