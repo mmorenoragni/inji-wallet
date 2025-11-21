@@ -89,13 +89,28 @@ public class MainActivity extends ReactActivity {
         }
     
         if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-          String code = result.getData().getStringExtra("auth_code");
-          android.util.Log.d("IDPerú", "Extracted auth_code: " + (code != null ? "PRESENT (length=" + code.length() + ")" : "NULL"));
+          // Read auth_status and auth_message that IDPerú returns
+          boolean authStatus = result.getData().getBooleanExtra("auth_status", false);
+          String authMessage = result.getData().getStringExtra("auth_message");
           
-          if (code != null) {
-            idPeruResultListener.onSuccess(code);
+          android.util.Log.d("IDPerú", "Extracted auth_status: " + authStatus);
+          android.util.Log.d("IDPerú", "Extracted auth_message: " + (authMessage != null ? authMessage : "NULL"));
+          
+          // Construct JSON with the real values from IDPerú
+          String jsonResult = String.format(
+            "{\"auth_status\":%b,\"auth_message\":\"%s\"}", 
+            authStatus, 
+            authMessage != null ? authMessage.replace("\"", "\\\"") : ""
+          );
+          
+          android.util.Log.d("IDPerú", "JSON result: " + jsonResult);
+          
+          if (authStatus) {
+            // Success: pass the complete JSON
+            idPeruResultListener.onSuccess(jsonResult);
           } else {
-            idPeruResultListener.onError("Missing auth_code in result intent");
+            // Failed: auth_status is false
+            idPeruResultListener.onError("Authentication failed: " + authMessage);
           }
         } else if (result.getResultCode() == RESULT_CANCELED) {
           android.util.Log.w("IDPerú", "IDPerú returned RESULT_CANCELED");

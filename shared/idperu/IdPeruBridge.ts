@@ -1,5 +1,10 @@
 import {NativeModules, Platform, NativeEventEmitter} from 'react-native';
 
+export type IdPeruAuthResult = {
+  auth_status: boolean;
+  auth_message: string;
+};
+
 const {IdPeruBridge} = NativeModules as {
   IdPeruBridge: {
     startAuth(
@@ -25,13 +30,13 @@ export type IdPeruConfig = {
  * Starts IDPerú authentication flow with dynamic configuration
  * @param qrData QR data or authorization URL to pass to IDPerú
  * @param cfg Configuration object with platform-specific settings
- * @returns Promise that resolves with authorization code
+ * @returns Promise that resolves with auth result containing auth_status and optional auth_code
  * @throws Error if configuration is invalid, IDPerú is not installed, or authentication fails
  */
 export async function startIdPeruAuth(
   qrData: string,
   cfg: IdPeruConfig,
-): Promise<string> {
+): Promise<IdPeruAuthResult> {
   if (!IdPeruBridge) {
     throw new Error('IdPeruBridge native module is not available');
   }
@@ -48,13 +53,14 @@ export async function startIdPeruAuth(
       console.log('[IDPerú] androidPackage:', cfg.androidPackage);
       console.log('[IDPerú] androidActivity:', cfg.androidActivity);
       console.log('[IDPerú] androidInputKey:', cfg.androidInputKey);
-      const authCode = await IdPeruBridge.startAuth(
+      const authResultJson = await IdPeruBridge.startAuth(
         qrData,
         cfg.androidPackage,
         cfg.androidActivity,
         cfg.androidInputKey,
       );
-      return authCode;
+      const authResult: IdPeruAuthResult = JSON.parse(authResultJson);
+      return authResult;
     } catch (error: any) {
       // Handle specific error codes
       if (error.code === 'E_APP_NOT_INSTALLED') {
@@ -97,7 +103,7 @@ export function subscribeAuthResult(
     throw new Error('IdPeruBridge native module is not available');
   }
 
-  const emitter = new NativeEventEmitter(IdPeruBridge);
+  const emitter = new NativeEventEmitter(NativeModules.IdPeruBridge);
   const subscription = emitter.addListener('IdPeruAuthResult', payload => {
     if (payload?.code) {
       handler(payload.code);

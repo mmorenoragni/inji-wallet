@@ -12,6 +12,7 @@ class IdPeruModule(private val reactContext: ReactApplicationContext) : ReactCon
         private const val DEFAULT_ACTIVITY_NAME = "pe.gob.reniec.feature.gateway.AppGatewayActivity"
         private const val DEFAULT_INPUT_KEY = "code"
         private const val RESULT_KEY = "auth_code"
+        private const val AUTH_STATUS_KEY = "auth_status"
     }
 
     override fun getName() = "IdPeruBridge"
@@ -68,6 +69,9 @@ class IdPeruModule(private val reactContext: ReactApplicationContext) : ReactCon
             // Launch IDPerú using MainActivity's launcher
             MainActivity.launchIdPeru(activity, intent, object : MainActivity.IdPeruResultListener {
                 override fun onSuccess(authCode: String) {
+                    // authCode contains the JSON string constructed in MainActivity
+                    // with auth_status and auth_message from IDPerú's response
+                    android.util.Log.d("IDPerú", "Resolving promise with JSON: $authCode")
                     promise.resolve(authCode)
                 }
 

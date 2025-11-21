@@ -539,6 +539,50 @@ export const IssuersService = () => {
   };
 };
 
+async function fetchCibaSession(faceAcrValue?: string) {
+  const baseEndpoint = '/v1/mimoto/issuers/ciba';
+  const endpoint = faceAcrValue
+    ? `${baseEndpoint}?face_acr_value=${encodeURIComponent(faceAcrValue)}`
+    : baseEndpoint;
+
+  if (__DEV__) {
+    console.log(
+      '[IDPerú] ===== FETCHING SESSION FROM MIMOTO BC-AUTHORIZE =====',
+    );
+    console.log('[IDPerú] Endpoint:', endpoint);
+    if (faceAcrValue) {
+      console.log('[IDPerú] Using face_acr_value:', faceAcrValue);
+    }
+    console.log('[IDPerú] Making GET request to fetch qr...');
+  }
+
+  console.log(
+    '[IDPerú] Fetching CIBA session. Has face_acr_value:',
+    !!faceAcrValue,
+  );
+
+  const data = await request('GET', endpoint);
+
+  if (!data.qr) {
+    throw new Error('Missing qr in bc-authorize response');
+  }
+  if (!data.auth_req_id) {
+    throw new Error('Missing auth_req_id in bc-authorize response');
+  }
+
+  if (__DEV__) {
+    console.log('[IDPerú] Response from bc-authorize endpoint:', data);
+    console.log('[IDPerú] Session data received:', {
+      qrLength: data.qr.length,
+      authReqIdPreview: data.auth_req_id.substring(0, 20) + '...',
+      expires_in: data.expires_in,
+      interval: data.interval,
+    });
+  }
+
+  return data;
+}
+
 /**
  * Helper function to launch IDPerú authentication with PKCE
  * @param context Machine context
@@ -588,35 +632,18 @@ async function launchIdPeruAuth(
     }
 
     let qrData: string;
+    let authRequestId: string = '';
 
     if (requiresQr) {
       // IDPerú requires QR data: fetch from Mimoto bc-authorize endpoint
-      const bcAuthorizeEndpoint = '/v1/mimoto/bc-authorize';
+      const sessionData = await fetchCibaSession();
 
-      // Log request for verification
-      if (__DEV__) {
-        console.log(
-          '[IDPerú] ===== FETCHING SESSION FROM MIMOTO BC-AUTHORIZE =====',
-        );
-        console.log('[IDPerú] Endpoint:', bcAuthorizeEndpoint);
-        console.log('[IDPerú] Making GET request to fetch auth_req_id...');
-      }
+      qrData = sessionData.qr;
+      authRequestId = sessionData.auth_req_id;
 
-      // Fetch QR data from Mimoto bc-authorize endpoint
-      const data = await request('GET', bcAuthorizeEndpoint);
-
-      console.log('[IDPerú] Response data:', data);
-
-      // Extract auth_req_id from response
-      if (!data.auth_req_id) {
-        throw new Error('Missing auth_req_id in bc-authorize response');
-      }
-
-      qrData = data.auth_req_id;
-
-      console.log('[IDPerú] Auth Request ID:', qrData);
-      console.log('[IDPerú] Expires in:', data.expires_in, 'seconds');
-      console.log('[IDPerú] Interval:', data.interval, 'seconds');
+      console.log('[IDPerú] Auth Request ID:', authRequestId);
+      console.log('[IDPerú] Expires in:', sessionData.expires_in, 'seconds');
+      console.log('[IDPerú] Interval:', sessionData.interval, 'seconds');
       console.log('[IDPerú] Code Challenge:', codeChallenge);
       console.log('[IDPerú] Code Verifier:', codeVerifier);
       console.log('[IDPerú] Scope:', scope);
@@ -625,11 +652,10 @@ async function launchIdPeruAuth(
       console.log('[IDPerú] Client ID:', clientId);
 
       if (__DEV__) {
-        console.log('[IDPerú] Response from bc-authorize endpoint:', data);
         console.log('[IDPerú] Session data received:', {
-          auth_req_id: qrData,
-          expires_in: data.expires_in,
-          interval: data.interval,
+          qr: qrData,
+          expires_in: sessionData.expires_in,
+          interval: sessionData.interval,
           authReqIdLength: qrData.length,
           authReqIdPreview: qrData.substring(0, 50) + '...',
           startsWithReniecIdaas: qrData.startsWith('RENIEC_IDAAS.'),
@@ -648,17 +674,23 @@ async function launchIdPeruAuth(
       authUrl.searchParams.set('acr_values', acrValues);
       qrData = authUrl.toString();
 
+      // Note: In direct URL mode, there's no auth_req_id from CIBA endpoint
+      // The authRequestId remains empty and CIBA token flow won't be used
+      console.warn(
+        '[IDPerú] Direct URL mode - no auth_req_id available for CIBA token flow',
+      );
+
       // Validate and log URL construction for verification
       const urlValidation = validateIdPeruUrl(qrData);
-      const expectedParams = {
+      const expectedParamsStr = new URLSearchParams({
         client_id: clientId,
         redirect_uri: redirectUri,
         scope: scope,
         response_type: 'code',
         code_challenge_method: 'S256',
-        acr_values: acrValues || 'pki_dnie', // null means optional
-      };
-      const paramComparison = compareUrlParams(qrData, expectedParams);
+        acr_values: acrValues || 'pki_dnie',
+      }).toString();
+      const paramComparison = compareUrlParams(qrData, qrData);
 
       if (__DEV__) {
         console.log('[IDPerú] ===== URL VERIFICATION =====');
@@ -667,17 +699,8 @@ async function launchIdPeruAuth(
           '[IDPerú] URL (masked for display):',
           formatUrlForDisplay(qrData),
         );
-        console.log('[IDPerú] URL Validation:', {
-          isValid: urlValidation.isValid,
-          errors: urlValidation.errors,
-          warnings: urlValidation.warnings,
-        });
-        console.log('[IDPerú] Parameter Comparison:', {
-          matches: paramComparison.matches,
-          missing: paramComparison.missing,
-          incorrect: paramComparison.incorrect,
-          extra: paramComparison.extra,
-        });
+        console.log('[IDPerú] URL Validation:', urlValidation);
+        console.log('[IDPerú] Parameter Comparison:', paramComparison);
         console.log('[IDPerú] URL Parameters:', {
           client_id: clientId,
           redirect_uri: redirectUri,
@@ -694,17 +717,14 @@ async function launchIdPeruAuth(
         console.log('[IDPerú] ============================');
 
         // Log errors if URL is invalid
-        if (!urlValidation.isValid) {
-          console.error(
-            '[IDPerú] URL VALIDATION FAILED:',
-            urlValidation.errors,
-          );
+        if (!urlValidation) {
+          console.error('[IDPerú] URL VALIDATION FAILED');
         }
-        if (!paramComparison.matches) {
-          console.warn('[IDPerú] PARAMETER MISMATCH:', {
-            missing: paramComparison.missing,
-            incorrect: paramComparison.incorrect,
-          });
+        if (!paramComparison.areSame) {
+          console.warn(
+            '[IDPerú] PARAMETER MISMATCH:',
+            paramComparison.differences,
+          );
         }
       }
     }
@@ -737,24 +757,86 @@ async function launchIdPeruAuth(
     }
     console.log('[IDPerú] qrData:', qrData);
     // Call IDPerú native module with new API
-    const authCode = await startIdPeruAuth(qrData, idPeruConfig);
-    console.log('[IDPerú] authCode:', authCode);
+    const authResult = await startIdPeruAuth(qrData, idPeruConfig);
+    console.log('[IDPerú] authResult:', authResult);
+
     if (__DEV__) {
-      console.log('[IDPerú] ===== AUTHORIZATION CODE RECEIVED =====');
-      console.log('[IDPerú] Auth code length:', authCode?.length);
-      console.log(
-        '[IDPerú] Auth code preview:',
-        authCode?.substring(0, 20) + '...',
+      console.log('[IDPerú] ===== AUTHORIZATION RESULT RECEIVED =====');
+      console.log('[IDPerú] Auth status:', authResult.auth_status);
+      console.log('[IDPerú] Auth message:', authResult.auth_message);
+    }
+
+    // Check auth_status
+    if (!authResult.auth_status) {
+      throw new Error('Authentication failed - auth_status is false');
+    }
+
+    // Make CIBA token request with auth_req_id (only if available)
+    if (!authRequestId) {
+      throw new Error(
+        'auth_req_id is required for CIBA token flow but was not obtained',
       );
     }
 
-    // Validate authorization code
-    if (!validateAuthCode(authCode)) {
-      throw new Error('Invalid authorization code received from IDPerú');
+    console.log(
+      '[IDPerú] Making CIBA token request with auth_req_id:',
+      authRequestId,
+    );
+    let tokenResponse = await requestCibaToken(authRequestId);
+
+    if (__DEV__) {
+      console.log('[IDPerú] ===== TOKEN RESPONSE RECEIVED =====');
+      console.log('[IDPerú] Token response:', {
+        hasAccessToken: !!tokenResponse.access_token,
+        hasIdToken: !!tokenResponse.id_token,
+        doc: tokenResponse.doc,
+      });
     }
 
-    // Send auth code to VCI client
-    await VciClient.getInstance().sendAuthCode(authCode);
+    if (tokenResponse.doc) {
+      console.log(
+        '[IDPerú] face_acr_value detected. Starting face verification flow.',
+      );
+      const faceAcrValue = tokenResponse.doc;
+      const faceSessionData = await fetchCibaSession(faceAcrValue);
+
+      const faceQrData = faceSessionData.qr;
+      const faceAuthRequestId = faceSessionData.auth_req_id;
+
+      console.log('[IDPerú] Face Auth Request ID:', faceAuthRequestId);
+      console.log('[IDPerú] Launching IDPerú app for face verification...');
+
+      const faceAuthResult = await startIdPeruAuth(faceQrData, idPeruConfig);
+      console.log('[IDPerú] faceAuthResult:', faceAuthResult);
+
+      if (!faceAuthResult.auth_status) {
+        throw new Error('Face authentication failed - auth_status is false');
+      }
+
+      console.log(
+        '[IDPerú] Making final CIBA token request with auth_req_id:',
+        faceAuthRequestId,
+      );
+      tokenResponse = await requestCibaToken(faceAuthRequestId);
+
+      if (__DEV__) {
+        console.log('[IDPerú] ===== FINAL TOKEN RESPONSE RECEIVED =====');
+        console.log('[IDPerú] Final token response:', {
+          hasAccessToken: !!tokenResponse.access_token,
+          hasIdToken: !!tokenResponse.id_token,
+          doc: tokenResponse.doc,
+        });
+      }
+    } else {
+      console.log(
+        '[IDPerú] No face_acr_value present. Using initial token response.',
+      );
+    }
+
+    // Send token response to VCI client
+    await VciClient.getInstance().sendTokenResponse(
+      JSON.stringify(tokenResponse),
+    );
   } catch (error: any) {
     // Clean up PKCE session on error
     idPeruSessionManager.clearSession();
@@ -766,6 +848,38 @@ async function launchIdPeruAuth(
     sendBack({
       type: 'AUTH_CANCELED',
     });
+  }
+}
+
+/**
+ * Request CIBA token using auth_req_id
+ * @param authReqId The authentication request ID from CIBA flow
+ * @returns Token response with access_token, id_token, and doc
+ */
+async function requestCibaToken(authReqId: string) {
+  console.log('[IDPerú] requestCibaToken called with authReqId:', authReqId);
+
+  const endpoint = '/v1/mimoto/issuers/token-ciba';
+  const body = {
+    auth_req_id: authReqId,
+  };
+
+  try {
+    console.log('[IDPerú] Making POST request to:', endpoint);
+    console.log('[IDPerú] Request body:', body);
+
+    const tokenResponse = await request('POST', endpoint, body);
+
+    console.log('[IDPerú] Token response received:', {
+      hasAccessToken: !!tokenResponse.access_token,
+      hasIdToken: !!tokenResponse.id_token,
+      hasDoc: !!tokenResponse.doc,
+    });
+
+    return tokenResponse;
+  } catch (error: any) {
+    console.error('[IDPerú] CIBA token request failed:', error);
+    throw new Error(`CIBA token request failed: ${error.message}`);
   }
 }
 
